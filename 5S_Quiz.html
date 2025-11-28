@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis dengan Waktu & Log In</title>
+    <style>
+        /* CSS: Desain Dasar */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e6f7ff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 100%; max-width: 450px; text-align: center; }
+        h1 { color: #007bff; margin-bottom: 20px; }
+        .timer-box { font-size: 24px; font-weight: bold; color: #dc3545; margin-bottom: 20px; border: 2px solid #dc3545; padding: 10px; border-radius: 8px; }
+        .options-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .btn { background-color: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 16px; transition: background 0.3s, transform 0.1s; width: 100%; }
+        .btn:hover { background-color: #0056b3; transform: translateY(-1px); }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        
+        /* Gaya Khusus Form */
+        #login-form input { width: calc(100% - 24px); padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        #login-form button { margin-top: 10px; }
+        
+        /* Gaya Hasil */
+        .result-box h2 { color: #28a745; }
+
+        /* Utilitas Tampilan */
+        .hidden { display: none; }
+        .loading { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Kuis Pengetahuan Umum</h1>
+    
+    <div id="login-screen">
+        <h2>Masuk untuk Mengerjakan</h2>
+        <form id="login-form">
+            <input type="text" id="name" placeholder="Nama Lengkap" required>
+            <input type="email" id="email" placeholder="Email (Wajib)" required>
+            <button class="btn" type="submit">Mulai Kuis!</button>
+        </form>
+    </div>
+
+    <div id="quiz-box" class="hidden">
+        <div class="timer-box">Waktu: <span id="time">18</span> detik</div>
+        <h3 id="question-text">Memuat soal dari Google Sheet...</h3>
+        <div class="options-container" id="options"></div>
+    </div>
+
+    <div id="result-box" class="hidden">
+        <h2>Kuis Selesai!</h2>
+        <p>Skor Anda: <span id="score-display">0</span> / <span id="total-questions">0</span></p>
+        <p>Status: <span id="status-display" style="font-weight: bold;"></span></p>
+        <button class="btn" onclick="location.reload()" style="margin-top: 20px;">Coba Lagi</button>
+    </div>
+</div>
+
+<audio id="audio-correct" src="PLACEHOLDER_URL_AUDIO_BENAR.mp3"></audio>
+<audio id="audio-wrong" src="PLACEHOLDER_URL_AUDIO_SALAH.mp3"></audio>
+<audio id="audio-timesup" src="PLACEHOLDER_URL_AUDIO_HABIS.mp3"></audio>
+
+
+<script>
+    // =========================================================================
+    //                            KONFIGURASI PENTING
+    // =========================================================================
+    
+    // GANTI DENGAN LINK CSV DARI LANGKAH 1A (Sheet Quiz)
+    const QUIZ_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_ckhncyG1uZDplHPFz-gppyHDcZtIbvuluEVaxkMYotlkT0nnjsSs1LHlyijKWtk_f92blRICjFN7/pub?gid=0&single=true&output=csv'; 
+    
+    // GANTI DENGAN LINK APPS SCRIPT DARI LANGKAH 1B (Sheet RespQ)
+    const APPS_SCRIPT_URL = 'https://script.google.com/a/macros/mrdiy.com/s/AKfycbzvL8zWi6VJhvmqjELDrBwlmPMXrRAAQpj5PrcesfzS5x1_8yERmHhyTujWBy6nnhlv/exec'; 
+
+    // Konfigurasi Audio
+    // GANTI dengan URL file MP3 yang kamu host secara publik (Google Drive, Dropbox, dll.)
+    document.getElementById('audio-correct').src = 'https://example.com/audio/correct.mp3'; // Contoh placeholder
+    document.getElementById('audio-wrong').src = 'https://example.com/audio/wrong.mp3';   // Contoh placeholder
+    document.getElementById('audio-timesup').src = 'https://example.com/audio/timesup.mp3'; // Contoh placeholder
+
+    const TIME_PER_QUESTION = 18; // Waktu per soal (detik)
+    const SCORE_PER_CORRECT = 20; // Skor per jawaban benar
+
+    // =========================================================================
+    //                            VARIABEL UTAMA
+    // =========================================================================
+    let questions = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let timeLeft = TIME_PER_QUESTION;
+    let timerInterval;
+    let totalTimeStart; // Waktu mulai kuis
+    let userName = '';
+    let userEmail = '';
+
+    // Elemen DOM
+    const loginScreen = document.getElementById('login-screen');
+    const quizBox = document.getElementById('quiz-box');
+    const resultBox = document.getElementById('result-box');
+    const questionText = document.getElementById('question-text');
+    const optionsContainer = document.getElementById('options');
+    const timeDisplay = document.getElementById('time');
+    const scoreDisplay = document.getElementById('score-display');
+    const statusDisplay = document.getElementById('status-display');
+    const totalQuestionsDisplay = document.getElementById('total-questions');
+
+    // Suara
+    const audioCorrect = document.getElementById('audio-correct');
+    const audioWrong = document.getElementById('audio-wrong');
+    const audioTimesUp = document.getElementById('audio-timesup');
+
+    // =========================================================================
+    //                            LOGIKA AUDIO & VOICEOVER
+    // =========================================================================
+    function playAudio(audioElement, text) {
+        // Hapus audio yang sedang diputar/diucapkan
+        window.speechSynthesis.cancel();
+        
+        // Atur pesan yang akan diucapkan
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'id-ID'; // Pastikan menggunakan bahasa Indonesia
+        
+        // Gunakan Web Speech API (Text-to-Speech)
+        window.speechSynthesis.speak(utterance);
+        
+        // (Opsional) Jika kamu tetap ingin menggunakan file MP3, gunakan ini:
+        // audioElement.play(); 
+    }
+
+
+    // =========================================================================
+    //                            LOGIKA KUIS
+    // =========================================================================
+
+    // A. Handle Login
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        userName = document.getElementById('name').value;
+        userEmail = document.getElementById('email').value;
+        
+        loginScreen.classList.add('hidden');
+        quizBox.classList.remove('hidden');
+        totalTimeStart = new Date(); // Mulai hitung total waktu
+        fetchQuestions(); // Ambil soal setelah login
+    });
+
+
+    // B. Ambil dan Parse Data Soal
+    async function fetchQuestions() {
+        try {
+            questionText.innerText = "Memuat soal...";
+            const response = await fetch(QUIZ_CSV_URL);
+            const data = await response.text();
+            
+            const rows = data.split('\n');
+            // Mulai dari baris 2 (indeks 1) untuk melewati Header Google Sheet
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i].split(',');
+                if (row.length >= 6) { // Pastikan ada 6 kolom
+                    questions.push({
+                        question: row[0].replace(/"/g, ''), // Hapus tanda kutip ganda jika ada
+                        options: [row[1], row[2], row[3], row[4]].map(o => o.replace(/"/g, '')),
+                        correct: parseInt(row[5].replace(/"/g, '')) // Indeks jawaban 0-3
+                    });
+                }
+            }
+            
+            if (questions.length > 0) {
+                loadQuestion();
+            } else {
+                questionText.innerText = "Gagal memuat soal: Tidak ada soal ditemukan.";
+            }
+
+        } catch (error) {
+            questionText.innerText = "Error memuat data. Cek kembali tautan CSV kamu.";
+            console.error('Fetch Error:', error);
+        }
+    }
+
+    // C. Muat Soal dan Mulai Timer
+    function loadQuestion() {
+        if (questions.length === 0) return;
+
+        clearInterval(timerInterval);
+        timeLeft = TIME_PER_QUESTION;
+        timeDisplay.innerText = timeLeft;
+        startTimer();
+
+        const currentData = questions[currentQuestionIndex];
+        questionText.innerHTML = `Soal ${currentQuestionIndex + 1} dari ${questions.length}:<br><strong>${currentData.question}</strong>`;
+        optionsContainer.innerHTML = '';
+
+        currentData.options.forEach((option, index) => {
+            const button = document.createElement('button');
+            button.innerText = option;
+            button.classList.add('btn');
+            button.onclick = () => selectAnswer(index);
+            optionsContainer.appendChild(button);
+        });
+    }
+
+    // D. Logika Timer
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timeDisplay.innerText = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                playAudio(audioTimesUp, "Lambat woy, makanya fokus");
+                nextQuestion(); 
+            }
+        }, 1000);
+    }
+
+    // E. Memilih Jawaban
+    function selectAnswer(selectedIndex) {
+        clearInterval(timerInterval);
+        
+        // Nonaktifkan semua tombol setelah memilih
+        Array.from(optionsContainer.children).forEach(btn => btn.disabled = true);
+
+        const correctIndex = questions[currentQuestionIndex].correct;
+        
+        if (selectedIndex === correctIndex) {
+            score += SCORE_PER_CORRECT;
+            playAudio(audioCorrect, "Jawabanmu benar, kamu nyontek ya?");
+        } else {
+            playAudio(audioWrong, "ayo belajar lagi sebelum dipukul rotan");
+        }
+
+        // Lanjut ke soal berikutnya setelah jeda singkat (agar suara sempat didengar)
+        setTimeout(nextQuestion, 1500); 
+    }
+
+    // F. Lanjut ke Soal Berikutnya
+    function nextQuestion() {
+        currentQuestionIndex++;
+        if (currentQuestionIndex < questions.length) {
+            loadQuestion();
+        } else {
+            showResult();
+        }
+    }
+
+    // G. Tampilkan Hasil dan Kirim Data
+    function showResult() {
+        quizBox.classList.add('hidden');
+        resultBox.classList.remove('hidden');
+        
+        const totalTimeEnd = new Date();
+        const timeTakenMs = totalTimeEnd - totalTimeStart;
+        
+        // Format waktu pengerjaan menjadi HH:MM:SS
+        const seconds = Math.floor(timeTakenMs / 1000);
+        const hours = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const secs = (seconds % 60).toString().padStart(2, '0');
+        const timeTakenFormatted = `${hours}:${minutes}:${secs}`;
+
+
+        // Hitung Status
+        const finalStatus = score > 60 ? 'Passed' : 'Failed';
+
+        scoreDisplay.innerText = score;
+        totalQuestionsDisplay.innerText = questions.length * SCORE_PER_CORRECT;
+        statusDisplay.innerText = finalStatus;
+        statusDisplay.style.color = finalStatus === 'Passed' ? '#28a745' : '#dc3545';
+        
+        // Kirim data ke Google Apps Script
+        sendDataToSheet(timeTakenFormatted, finalStatus);
+    }
+    
+    // H. Fungsi Pengiriman Data
+    async function sendDataToSheet(time, status) {
+        const formData = new FormData();
+        formData.append('time', time); // Sebenarnya Apps Script akan mencatat timestamp, tapi kita kirim juga total waktu pengerjaan
+        formData.append('name', userName);
+        formData.append('email', userEmail);
+        formData.append('score', score);
+        formData.append('status', status);
+
+        try {
+            // Mengirim data menggunakan POST request
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                body: formData,
+                mode: 'no-cors' // Penting untuk Apps Script
+            });
+            console.log("Data berhasil dikirim ke Google Sheet!");
+        } catch (error) {
+            console.error('Gagal mengirim data ke Sheet:', error);
+            // Tampilkan pesan error jika perlu
+        }
+    }
+
+    // Awal: Hanya tampilkan layar login
+    // Tidak perlu memanggil fungsi apapun di awal selain yang dipicu oleh event 'submit' form
+
+</script>
+
+</body>
+</html>
