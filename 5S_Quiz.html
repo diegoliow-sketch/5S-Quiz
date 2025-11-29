@@ -62,7 +62,7 @@
 
 <script>
     // =========================================================================
-    //                            KONFIGURASI PENTING
+    //                  KONFIGURASI PENTING (PUNYA DIEGO)
     // =========================================================================
     
     // GANTI DENGAN LINK CSV DARI LANGKAH 1A (Sheet Quiz)
@@ -78,10 +78,10 @@
     document.getElementById('audio-timesup').src = 'https://example.com/audio/timesup.mp3'; // Contoh placeholder
 
     const TIME_PER_QUESTION = 18; // Waktu per soal (detik)
-    const SCORE_PER_CORRECT = 20; // Skor per jawaban benar
+    const SCORE_PER_CORRECT = 5; // Skor per jawaban benar
 
     // =========================================================================
-    //                            VARIABEL UTAMA
+    //             VARIABEL UTAMA (KLO MAU GANTI TANYA DIEGO DULU)
     // =========================================================================
     let questions = [];
     let currentQuestionIndex = 0;
@@ -109,7 +109,7 @@
     const audioTimesUp = document.getElementById('audio-timesup');
 
     // =========================================================================
-    //                            LOGIKA AUDIO & VOICEOVER
+    //           AUDIO & VOICEOVER (A.I VERS AMBIL DARI GITHUB DIEGO)
     // =========================================================================
     function playAudio(audioElement, text) {
         // Hapus audio yang sedang diputar/diucapkan
@@ -176,7 +176,7 @@
         }
     }
 
-    // C. Muat Soal dan Mulai Timer
+    // C. Muat Soal dan Mulai Timer (INI AMBIL DARI SHEET QUIZ PAK FAHRIZAL)
     function loadQuestion() {
         if (questions.length === 0) return;
 
@@ -258,7 +258,7 @@
 
 
         // Hitung Status
-        const finalStatus = score > 60 ? 'Passed' : 'Failed';
+        const finalStatus = score > 85 ? 'Passed' : 'Failed';
 
         scoreDisplay.innerText = score;
         totalQuestionsDisplay.innerText = questions.length * SCORE_PER_CORRECT;
