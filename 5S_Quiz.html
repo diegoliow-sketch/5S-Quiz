@@ -78,7 +78,7 @@
     document.getElementById('audio-timesup').src = 'https://example.com/audio/timesup.mp3'; // Contoh placeholder
 
     const TIME_PER_QUESTION = 18; // Waktu per soal (detik)
-    const SCORE_PER_CORRECT = 5; // Skor per jawaban benar
+    const SCORE_PER_CORRECT = 10; // Skor per jawaban benar
 
     // =========================================================================
     //             VARIABEL UTAMA (KLO MAU GANTI TANYA DIEGO DULU)
@@ -258,7 +258,7 @@
 
 
         // Hitung Status
-        const finalStatus = score > 80 ? 'Passed' : 'Failed';
+        const finalStatus = score > 84 ? 'Passed' : 'Failed';
 
         scoreDisplay.innerText = score;
         totalQuestionsDisplay.innerText = questions.length * SCORE_PER_CORRECT;
